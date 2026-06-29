@@ -25,10 +25,12 @@ Set a custom port with `PORT=8080 npm start`.
 
 ## Loading lineups
 
-1. **BBC import (best-effort):** paste a BBC Sport match link and click **Import**. BBC
-   blocks bots and renders lineups in the browser, so this may not always work.
-2. **Manual (always works):** type/paste each team's name and players — one per line,
-   optional shirt number first, e.g. `9 Harry Kane`. Auto-imported lineups are editable.
+1. **Quick paste (one click):** paste both line-ups into the box and click **Fill teams**.
+   Format: team name on its own line, players below it (optional shirt number first,
+   e.g. `9 Harry Kane`), a blank line between the two teams. Tip: ask any assistant for
+   "full squad with numbers of TEAM A vs TEAM B" and paste the result straight in.
+2. **Manual edit:** the parsed teams drop into editable fields — fix anything, then
+   **Open picks**.
 
 ## How it works
 
