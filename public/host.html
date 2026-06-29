@@ -26,13 +26,12 @@
 
     <!-- lineup setup -->
     <div class="card" id="setupCard">
-      <h2>1 · Load the lineups</h2>
-      <label for="bbcUrl">Paste a BBC Sport match link (optional)</label>
-      <div class="linkrow">
-        <input type="text" id="bbcUrl" placeholder="https://www.bbc.co.uk/sport/football/live/..." />
-        <button class="btn small" id="importBtn">Import</button>
-      </div>
-      <p class="muted" id="importMsg">Auto-import is best-effort — if it can't read the page, just fill in the teams below.</p>
+      <h2>1 · Quick paste both teams</h2>
+      <p class="muted">Paste both line-ups at once, then click <b>Fill teams</b>. Format: team name on its own line, players below it (optional shirt number first), a blank line between the two teams.</p>
+      <textarea id="blobPaste" placeholder="England&#10;1 Pickford&#10;9 Kane&#10;10 Bellingham&#10;&#10;France&#10;1 Maignan&#10;10 Mbappé&#10;9 Giroud"></textarea>
+      <div class="spacer"></div>
+      <button class="btn small" id="fillFromBlob">Fill teams ↓</button>
+      <p class="muted" id="importMsg">Tip: ask an assistant for "full squad with numbers of TEAM A vs TEAM B" and paste the result here.</p>
 
       <hr class="sep" />
       <h2>2 · Teams &amp; players</h2>

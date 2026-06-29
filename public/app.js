@@ -102,6 +102,37 @@ function playersToText(players) {
     .join('\n');
 }
 
+/**
+ * Parse a pasted blob of both line-ups into { home, away }.
+ * Each team is a block of lines: first line = team name, rest = players.
+ * Teams are separated by one or more blank lines. Returns null if it can't
+ * find two teams.
+ */
+function parseBlob(text) {
+  const blocks = String(text || '')
+    .replace(/\r/g, '')
+    .split(/\n\s*\n+/) // split on blank line(s)
+    .map((b) =>
+      b
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean)
+    )
+    .filter((b) => b.length);
+
+  if (blocks.length < 2) return null;
+
+  const toTeam = (lines) => ({
+    name: lines[0],
+    players: parsePlayers(lines.slice(1).join('\n')),
+  });
+
+  const home = toTeam(blocks[0]);
+  const away = toTeam(blocks[1]);
+  if (!home.players.length || !away.players.length) return null;
+  return { home, away };
+}
+
 /* ================================ HOST PAGE =============================== */
 const HostPage = {
   socket: null,
@@ -120,7 +151,7 @@ const HostPage = {
       navigator.clipboard?.writeText(inp.value);
       toast('Link copied');
     };
-    $('importBtn').onclick = () => this.importBbc();
+    $('fillFromBlob').onclick = () => this.fillFromBlob();
     $('saveBtn').onclick = () => this.saveLineups(false);
     $('openBtn').onclick = () => this.saveLineups(true);
     $('closeBtn').onclick = () => this.socket.emit('host:close', (r) => this.ack(r, 'Picks locked'));
@@ -161,33 +192,19 @@ const HostPage = {
     else if (okMsg) toast(okMsg);
   },
 
-  async importBbc() {
-    const url = document.getElementById('bbcUrl').value.trim();
-    const msg = document.getElementById('importMsg');
-    if (!url) return toast('Paste a BBC link first', true);
-    msg.textContent = 'Importing…';
-    try {
-      const res = await fetch('/api/import-bbc', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
-      });
-      const data = await res.json();
-      if (data.ok && data.teams) {
-        document.getElementById('homeName').value = data.teams.home.name || '';
-        document.getElementById('awayName').value = data.teams.away.name || '';
-        document.getElementById('homePlayers').value = playersToText(data.teams.home.players);
-        document.getElementById('awayPlayers').value = playersToText(data.teams.away.players);
-        msg.textContent = 'Imported — check the names, then open picks.';
-        toast('Lineups imported ✓');
-      } else {
-        msg.textContent = data.reason || 'Could not import. Enter lineups manually.';
-        toast('Auto-import failed — fill in manually', true);
-      }
-    } catch {
-      msg.textContent = 'Import failed. Enter lineups manually.';
-      toast('Import failed', true);
+  fillFromBlob() {
+    const text = document.getElementById('blobPaste').value;
+    const teams = parseBlob(text);
+    if (!teams) {
+      return toast('Could not read two teams — separate them with a blank line', true);
     }
+    document.getElementById('homeName').value = teams.home.name || '';
+    document.getElementById('awayName').value = teams.away.name || '';
+    document.getElementById('homePlayers').value = playersToText(teams.home.players);
+    document.getElementById('awayPlayers').value = playersToText(teams.away.players);
+    document.getElementById('importMsg').textContent =
+      `Filled ${teams.home.name} (${teams.home.players.length}) vs ${teams.away.name} (${teams.away.players.length}) — check below, then Open picks.`;
+    toast('Teams filled ✓');
   },
 
   collectTeams() {

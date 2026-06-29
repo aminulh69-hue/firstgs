@@ -5,7 +5,6 @@ const crypto = require('crypto');
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const { fetchBbcLineups } = require('./lib/bbcLineups');
 
 const app = express();
 const server = http.createServer(app);
@@ -103,25 +102,6 @@ function allPlayerIds(room) {
     [...room.teams.home.players, ...room.teams.away.players].map((p) => p.id)
   );
 }
-
-/* ------------------------------- HTTP API --------------------------------- */
-app.post('/api/import-bbc', async (req, res) => {
-  const url = String(req.body?.url || '').trim();
-  if (!url) return res.status(400).json({ error: 'Missing url' });
-  try {
-    const teams = await fetchBbcLineups(url);
-    if (!teams) {
-      return res.json({
-        ok: false,
-        reason:
-          'Could not read lineups from that link automatically. Enter them manually below.',
-      });
-    }
-    return res.json({ ok: true, teams });
-  } catch {
-    return res.json({ ok: false, reason: 'Import failed. Enter lineups manually.' });
-  }
-});
 
 /* ----------------------------- socket handlers ---------------------------- */
 io.on('connection', (socket) => {
