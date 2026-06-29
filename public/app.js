@@ -47,10 +47,12 @@ function renderBoard(mount, state, opts = {}) {
           const taken = !!pick;
           const mine = taken && pick.participantId === opts.myId;
           const isWinner = scorer && scorer === p.id;
+          const isSelected = !taken && opts.selectedId === p.id;
           const cls = [
             'player',
             taken ? 'taken' : '',
             mine ? 'mine' : '',
+            isSelected ? 'selected' : '',
             isWinner ? 'winner' : '',
             opts.mode === 'play' && (taken && !mine) ? 'notclickable' : '',
           ]
@@ -285,6 +287,7 @@ const GamePage = {
   state: null,
   code: null,
   myId: null,
+  pendingPlayerId: null,
 
   init() {
     const params = new URLSearchParams(location.search);
@@ -300,8 +303,32 @@ const GamePage = {
     this.socket.on('connect', () => this.tryResume());
 
     document.getElementById('joinBtn').onclick = () => this.join();
-    document.getElementById('releaseBtn').onclick = () =>
+    document.getElementById('lockBtn').onclick = () => this.lockIn();
+    document.getElementById('releaseBtn').onclick = () => {
+      this.pendingPlayerId = null;
       this.socket.emit('player:release', (r) => { if (r && r.error) toast(r.error, true); });
+    };
+  },
+
+  lockIn() {
+    const s = this.state;
+    if (!this.pendingPlayerId) return toast('Select a player first', true);
+    if (!s || s.status !== 'open') return toast('Picks aren’t open', true);
+    if (s.picks[this.pendingPlayerId]) {
+      this.pendingPlayerId = null;
+      this.onState(s);
+      return toast('Already taken — pick someone else', true);
+    }
+    this.socket.emit('player:claim', { playerId: this.pendingPlayerId }, (r) => {
+      if (r && r.error) {
+        this.pendingPlayerId = null;
+        this.onState(this.state);
+        toast(r.error, true);
+      } else {
+        this.pendingPlayerId = null;
+        toast('Locked in! 🔒');
+      }
+    });
   },
 
   savedId() {
@@ -364,20 +391,38 @@ const GamePage = {
 
     // My pick card
     const relBtn = $('releaseBtn');
+    const lockBtn = $('lockBtn');
     const nextPrice = s.pricing ? s.pricing.next : null;
     const myPrice = myPickId && s.picks[myPickId] ? s.picks[myPickId].price : null;
+
+    // Clear a stale selection (locked already, or the player got taken).
+    if (myPickId || (this.pendingPlayerId && s.picks[this.pendingPlayerId])) {
+      this.pendingPlayerId = null;
+    }
+    const pending = this.pendingPlayerId ? this.findPlayer(this.pendingPlayerId) : null;
+
     if (myPick) {
       $('myPickTitle').textContent = `Your pick: ${myPick.name} — ${money(myPrice)}`;
       $('myPickSub').textContent = s.status === 'open'
         ? 'Locked in. Release it to choose someone else (you’ll be re-priced at the current rate).'
         : 'Picks are locked. Good luck!';
+      lockBtn.classList.add('hidden');
       relBtn.classList.toggle('hidden', s.status !== 'open');
     } else {
-      $('myPickTitle').textContent = me ? 'Pick your first goalscorer' : 'Watching the board';
-      $('myPickSub').textContent = s.status === 'open'
-        ? `Tap any player to lock them in. Next lock-in costs ${money(nextPrice)} — the price rises 50p with each pick, so be quick!`
-        : (s.status === 'closed' ? 'Picks are locked.' : 'Waiting for the host to open picks…');
       relBtn.classList.add('hidden');
+      const canPick = me && s.status === 'open';
+      if (pending && canPick) {
+        $('myPickTitle').textContent = `Selected: ${pending.name}`;
+        $('myPickSub').textContent = `Tap a different row to change, or lock it in for ${money(nextPrice)} (price rises 50p per pick).`;
+        lockBtn.textContent = `🔒 Lock in ${pending.name} — ${money(nextPrice)}`;
+        lockBtn.classList.remove('hidden');
+      } else {
+        $('myPickTitle').textContent = me ? 'Pick your first goalscorer' : 'Watching the board';
+        $('myPickSub').textContent = canPick
+          ? `Tap any player to select them — tap around freely. Next lock-in costs ${money(nextPrice)}.`
+          : (s.status === 'closed' ? 'Picks are locked.' : 'Waiting for the host to open picks…');
+        lockBtn.classList.add('hidden');
+      }
     }
 
     if ($('potChip') && s.pricing) $('potChip').textContent = `Pot ${money(s.pricing.pot)}`;
@@ -389,6 +434,7 @@ const GamePage = {
     renderBoard($('boardMount'), s, {
       mode: 'play',
       myId: this.myId,
+      selectedId: this.pendingPlayerId,
       onClick: (playerId, taken, mine) => this.onPlayerClick(playerId, taken, mine),
     });
   },
@@ -419,15 +465,12 @@ const GamePage = {
     if (!s) return;
     if (!this.myId) return toast('Join the game to pick', true);
     if (s.status !== 'open') return toast(s.status === 'closed' ? 'Picks are locked' : 'Picks aren’t open yet', true);
-    if (mine) {
-      this.socket.emit('player:release', (r) => { if (r && r.error) toast(r.error, true); });
-      return;
-    }
-    if (taken) return toast('Already taken — too slow!', true);
-    this.socket.emit('player:claim', { playerId }, (r) => {
-      if (r && r.error) toast(r.error, true);
-      else toast('Locked in! 🔒');
-    });
+    const me = s.participants[this.myId];
+    if (me && me.pickPlayerId) return toast('Release your pick first to change it', true);
+    if (taken) return toast('Already taken — pick someone else', true);
+    // Just select (toggle) — locking happens via the Lock in button.
+    this.pendingPlayerId = this.pendingPlayerId === playerId ? null : playerId;
+    this.onState(s);
   },
 
   findPlayer(id) {

@@ -158,6 +158,15 @@ textarea { resize: vertical; min-height: 120px; font-family: ui-monospace, "Casc
   font-size: 12px; font-weight: 800; padding: 3px 8px; border-radius: 999px;
   background: #0d1c15; border: 1px solid var(--line); color: var(--green); white-space: nowrap;
 }
+.player.selected {
+  border-color: var(--home);
+  background: rgba(56,189,248,0.16);
+  box-shadow: 0 0 0 2px var(--home) inset;
+}
+.player.selected::after {
+  content: '✓ tap Lock in';
+  font-size: 11px; font-weight: 800; color: var(--home); white-space: nowrap; margin-left: auto;
+}
 .player.taken { cursor: default; opacity: 0.92; background: rgba(251,191,36,0.08); border-color: rgba(251,191,36,0.4); }
 .player.mine { border-color: var(--green); background: rgba(52,211,153,0.12); }
 .player.mine .holder { background: var(--green); color: #06120c; }
