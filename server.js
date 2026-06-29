@@ -12,7 +12,7 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 const MAX_PLAYERS = 8;
-const BASE_PRICE = 3.0; // first lock-in costs this much
+const BASE_PRICE = 2.5; // first lock-in costs this much
 const PRICE_STEP = 0.5; // every subsequent lock-in costs 50p more
 
 /** Price for the next lock-in given how many players are already locked in. */
@@ -246,25 +246,25 @@ io.on('connection', (socket) => {
     broadcast(room);
   });
 
-  socket.on('player:release', (ack) => {
-    const room = getRoom();
-    if (!room || !participantId) return ack?.({ error: 'Join the game first.' });
-    if (room.status !== 'open') return ack?.({ error: 'Picks are locked.' });
-    const me = room.participants[participantId];
-    if (me.pickPlayerId) {
-      delete room.picks[me.pickPlayerId];
-      me.pickPlayerId = null;
-    }
-    ack?.({ ok: true });
-    broadcast(room);
-  });
-
   socket.on('subscribe', ({ code } = {}, ack) => {
     const room = rooms.get(String(code || '').toUpperCase());
     if (!room) return ack?.({ error: 'Room not found' });
     joinedCode = room.code;
     socket.join(room.code);
     ack?.({ ok: true, state: publicState(room) });
+  });
+
+  // Drop players who leave without having locked a pick, so the live count
+  // reflects who's actually in. Players who already locked in stay (their pick
+  // is final and persists even if they close the tab).
+  socket.on('disconnect', () => {
+    const room = getRoom();
+    if (!room || !participantId) return;
+    const me = room.participants[participantId];
+    if (me && !me.pickPlayerId) {
+      delete room.participants[participantId];
+      broadcast(room);
+    }
   });
 });
 

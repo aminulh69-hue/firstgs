@@ -304,10 +304,6 @@ const GamePage = {
 
     document.getElementById('joinBtn').onclick = () => this.join();
     document.getElementById('lockBtn').onclick = () => this.lockIn();
-    document.getElementById('releaseBtn').onclick = () => {
-      this.pendingPlayerId = null;
-      this.socket.emit('player:release', (r) => { if (r && r.error) toast(r.error, true); });
-    };
   },
 
   lockIn() {
@@ -390,7 +386,6 @@ const GamePage = {
     if ($('meChip')) $('meChip').textContent = me ? `You: ${me.displayName}` : 'Spectating';
 
     // My pick card
-    const relBtn = $('releaseBtn');
     const lockBtn = $('lockBtn');
     const nextPrice = s.pricing ? s.pricing.next : null;
     const myPrice = myPickId && s.picks[myPickId] ? s.picks[myPickId].price : null;
@@ -404,12 +399,10 @@ const GamePage = {
     if (myPick) {
       $('myPickTitle').textContent = `Your pick: ${myPick.name} — ${money(myPrice)}`;
       $('myPickSub').textContent = s.status === 'open'
-        ? 'Locked in. Release it to choose someone else (you’ll be re-priced at the current rate).'
+        ? 'Locked in — this is final. Good luck! 🍀'
         : 'Picks are locked. Good luck!';
       lockBtn.classList.add('hidden');
-      relBtn.classList.toggle('hidden', s.status !== 'open');
     } else {
-      relBtn.classList.add('hidden');
       const canPick = me && s.status === 'open';
       if (pending && canPick) {
         $('myPickTitle').textContent = `Selected: ${pending.name}`;
@@ -466,7 +459,7 @@ const GamePage = {
     if (!this.myId) return toast('Join the game to pick', true);
     if (s.status !== 'open') return toast(s.status === 'closed' ? 'Picks are locked' : 'Picks aren’t open yet', true);
     const me = s.participants[this.myId];
-    if (me && me.pickPlayerId) return toast('Release your pick first to change it', true);
+    if (me && me.pickPlayerId) return toast('You’re locked in — picks are final', true);
     if (taken) return toast('Already taken — pick someone else', true);
     // Just select (toggle) — locking happens via the Lock in button.
     this.pendingPlayerId = this.pendingPlayerId === playerId ? null : playerId;
