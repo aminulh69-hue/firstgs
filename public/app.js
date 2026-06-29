@@ -20,6 +20,10 @@ function esc(s) {
 
 const statusLabel = { lobby: 'lobby', open: 'open', closed: 'locked' };
 
+function money(n) {
+  return '£' + (Number(n) || 0).toFixed(2);
+}
+
 /**
  * Render the two-column board.
  * opts: { myId, mode: 'play'|'host', onClick(playerId, taken, mine) }
@@ -53,7 +57,8 @@ function renderBoard(mount, state, opts = {}) {
             .filter(Boolean)
             .join(' ');
           const holder = taken
-            ? `<span class="holder">${isWinner ? '🏆 ' : ''}${esc(pick.displayName)}</span>`
+            ? `<span class="holder">${isWinner ? '🏆 ' : ''}${esc(pick.displayName)}</span>` +
+              (pick.price != null ? `<span class="price">${money(pick.price)}</span>` : '')
             : '';
           const num = p.number != null ? p.number : '·';
           return `<li class="${cls}" data-id="${esc(p.id)}" data-taken="${taken}" data-mine="${mine}">
@@ -225,6 +230,7 @@ const HostPage = {
     const pill2 = $('statusPill2');
     if (pill2) { pill2.textContent = statusLabel[s.status]; pill2.className = 'pill ' + s.status; }
     $('playerCountChip').textContent = `${s.playerCount} / ${s.maxPlayers} players`;
+    if ($('potChip') && s.pricing) $('potChip').textContent = `Pot ${money(s.pricing.pot)}`;
 
     // If picks are running, surface the live controls.
     const live = s.status === 'open' || s.status === 'closed';
@@ -341,19 +347,23 @@ const GamePage = {
 
     // My pick card
     const relBtn = $('releaseBtn');
+    const nextPrice = s.pricing ? s.pricing.next : null;
+    const myPrice = myPickId && s.picks[myPickId] ? s.picks[myPickId].price : null;
     if (myPick) {
-      $('myPickTitle').textContent = `Your pick: ${myPick.name}`;
+      $('myPickTitle').textContent = `Your pick: ${myPick.name} — ${money(myPrice)}`;
       $('myPickSub').textContent = s.status === 'open'
-        ? 'Locked in. You can release it to choose someone else.'
+        ? 'Locked in. Release it to choose someone else (you’ll be re-priced at the current rate).'
         : 'Picks are locked. Good luck!';
       relBtn.classList.toggle('hidden', s.status !== 'open');
     } else {
       $('myPickTitle').textContent = me ? 'Pick your first goalscorer' : 'Watching the board';
       $('myPickSub').textContent = s.status === 'open'
-        ? 'Tap any available player from either team to lock them in.'
+        ? `Tap any player to lock them in. Next lock-in costs ${money(nextPrice)} — the price rises 50p with each pick, so be quick!`
         : (s.status === 'closed' ? 'Picks are locked.' : 'Waiting for the host to open picks…');
       relBtn.classList.add('hidden');
     }
+
+    if ($('potChip') && s.pricing) $('potChip').textContent = `Pot ${money(s.pricing.pot)}`;
 
     // Result banner
     this.renderResult(s, myPickId);

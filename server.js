@@ -13,6 +13,13 @@ const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
 const MAX_PLAYERS = 8;
+const BASE_PRICE = 3.0; // first lock-in costs this much
+const PRICE_STEP = 0.5; // every subsequent lock-in costs 50p more
+
+/** Price for the next lock-in given how many players are already locked in. */
+function priceForNextPick(picksMade) {
+  return Math.round((BASE_PRICE + PRICE_STEP * picksMade) * 100) / 100;
+}
 
 app.use(express.json({ limit: '256kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -62,6 +69,12 @@ function publicState(room) {
     firstScorerPlayerId: room.firstScorerPlayerId,
     playerCount: Object.keys(room.participants).length,
     maxPlayers: MAX_PLAYERS,
+    pricing: {
+      base: BASE_PRICE,
+      step: PRICE_STEP,
+      next: priceForNextPick(Object.keys(room.picks).length),
+      pot: Object.values(room.picks).reduce((sum, p) => sum + (p.price || 0), 0),
+    },
   };
 }
 
@@ -246,6 +259,7 @@ io.on('connection', (socket) => {
       participantId,
       displayName: me.displayName,
       ts: Date.now(),
+      price: priceForNextPick(Object.keys(room.picks).length),
     };
     me.pickPlayerId = playerId;
     ack?.({ ok: true });

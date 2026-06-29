@@ -154,6 +154,10 @@ textarea { resize: vertical; min-height: 120px; font-family: ui-monospace, "Casc
   background: var(--gold); color: #1a1304; white-space: nowrap;
 }
 
+.player .price {
+  font-size: 12px; font-weight: 800; padding: 3px 8px; border-radius: 999px;
+  background: #0d1c15; border: 1px solid var(--line); color: var(--green); white-space: nowrap;
+}
 .player.taken { cursor: default; opacity: 0.92; background: rgba(251,191,36,0.08); border-color: rgba(251,191,36,0.4); }
 .player.mine { border-color: var(--green); background: rgba(52,211,153,0.12); }
 .player.mine .holder { background: var(--green); color: #06120c; }
