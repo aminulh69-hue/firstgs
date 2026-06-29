@@ -1,0 +1,21 @@
+{
+  "name": "first-goalscorer",
+  "version": "1.0.0",
+  "description": "Lightweight live game: reserve a player to predict the first goalscorer of a match.",
+  "type": "commonjs",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node e2e.test.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.3"
+  }
+}

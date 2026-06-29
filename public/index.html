@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>First Goalscorer — Lineup Lock</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand"><span class="ball">⚽</span> First Goalscorer</div>
+    <p class="tagline">Lineups are out. Lock in your striker before someone else grabs them. First come, first served.</p>
+
+    <div class="card">
+      <h2>Host a game</h2>
+      <p class="muted">Set up the two teams and run the game on the big screen.</p>
+      <button class="btn" id="hostBtn">Create a game</button>
+    </div>
+
+    <div class="card">
+      <h2>Join a game</h2>
+      <label for="code">Game code</label>
+      <input type="text" id="code" placeholder="ABCD" autocomplete="off" maxlength="4"
+             style="text-transform:uppercase;letter-spacing:6px;font-weight:800;font-size:22px" />
+      <label for="name">Your name</label>
+      <input type="text" id="name" placeholder="e.g. Sam" autocomplete="off" maxlength="20" />
+      <div class="spacer"></div>
+      <button class="btn gold" id="joinBtn">Join game</button>
+    </div>
+
+    <p class="muted center">Up to 8 players · pick anyone from either team · whoever scores first wins.</p>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    function toast(msg, err) {
+      const t = document.getElementById('toast');
+      t.textContent = msg; t.classList.toggle('err', !!err); t.classList.add('show');
+      clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2600);
+    }
+    document.getElementById('hostBtn').onclick = () => { location.href = '/host.html'; };
+    document.getElementById('joinBtn').onclick = () => {
+      const code = document.getElementById('code').value.trim().toUpperCase();
+      const name = document.getElementById('name').value.trim();
+      if (code.length !== 4) return toast('Enter the 4-letter game code', true);
+      if (!name) return toast('Enter your name', true);
+      sessionStorage.setItem('pendingName', name);
+      location.href = '/game.html?room=' + encodeURIComponent(code);
+    };
+    document.getElementById('code').addEventListener('input', e => {
+      e.target.value = e.target.value.toUpperCase();
+    });
+  </script>
+</body>
+</html>

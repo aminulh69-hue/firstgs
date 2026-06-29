@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Play — First Goalscorer</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand"><span class="ball">⚽</span> First Goalscorer</div>
+
+    <!-- join gate -->
+    <div class="card" id="joinCard">
+      <h2>Join game <span class="code" id="joinCode" style="font-size:20px"></span></h2>
+      <label for="name">Your name</label>
+      <input type="text" id="name" placeholder="e.g. Sam" autocomplete="off" maxlength="20" />
+      <div class="spacer"></div>
+      <button class="btn gold" id="joinBtn">Join</button>
+      <p class="muted" id="joinMsg"></p>
+    </div>
+
+    <!-- play area -->
+    <div class="hidden" id="playArea">
+      <div class="statusbar">
+        <div class="chips">
+          <span class="chip" id="meChip">—</span>
+          <span class="chip" id="countChip">0 / 8</span>
+        </div>
+        <span class="pill" id="statusPill">—</span>
+      </div>
+
+      <div id="resultBanner"></div>
+
+      <div class="card" id="myPickCard">
+        <h2 id="myPickTitle">Pick your first goalscorer</h2>
+        <p class="muted" id="myPickSub">Tap any available player from either team. Once you lock one in, it's yours.</p>
+        <button class="btn danger small hidden" id="releaseBtn">Release my pick</button>
+      </div>
+
+      <div id="boardMount"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+  <script>GamePage.init();</script>
+</body>
+</html>

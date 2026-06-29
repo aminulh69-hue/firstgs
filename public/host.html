@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Host — First Goalscorer</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand"><span class="ball">⚽</span> First Goalscorer <span class="muted" style="font-size:13px">· host</span></div>
+
+    <!-- room code + share -->
+    <div class="card" id="codeCard">
+      <h2>Game code</h2>
+      <div class="codebox">
+        <span class="code" id="roomCode">····</span>
+        <span class="pill lobby" id="statusPill">lobby</span>
+      </div>
+      <div class="linkrow">
+        <input type="text" id="shareLink" readonly />
+        <button class="btn small secondary" id="copyLink">Copy</button>
+      </div>
+      <p class="muted">Share the code or link. Up to 8 players can join.</p>
+    </div>
+
+    <!-- lineup setup -->
+    <div class="card" id="setupCard">
+      <h2>1 · Load the lineups</h2>
+      <label for="bbcUrl">Paste a BBC Sport match link (optional)</label>
+      <div class="linkrow">
+        <input type="text" id="bbcUrl" placeholder="https://www.bbc.co.uk/sport/football/live/..." />
+        <button class="btn small" id="importBtn">Import</button>
+      </div>
+      <p class="muted" id="importMsg">Auto-import is best-effort — if it can't read the page, just fill in the teams below.</p>
+
+      <hr class="sep" />
+      <h2>2 · Teams &amp; players</h2>
+      <p class="muted">One player per line. Optional shirt number first, e.g. <code>9 Harry Kane</code>.</p>
+
+      <div class="board">
+        <div class="team home">
+          <label>Home team name</label>
+          <input type="text" id="homeName" placeholder="England" />
+          <label>Home players</label>
+          <textarea id="homePlayers" placeholder="1 Pickford&#10;9 Kane&#10;10 Bellingham"></textarea>
+        </div>
+        <div class="team away">
+          <label>Away team name</label>
+          <input type="text" id="awayName" placeholder="France" />
+          <label>Away players</label>
+          <textarea id="awayPlayers" placeholder="1 Maignan&#10;10 Mbappé&#10;9 Giroud"></textarea>
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <div class="row">
+        <button class="btn secondary" id="saveBtn">Save lineups</button>
+        <button class="btn gold" id="openBtn">Open picks →</button>
+      </div>
+    </div>
+
+    <!-- live controls -->
+    <div class="card hidden" id="liveCard">
+      <div class="statusbar">
+        <h2 style="margin:0">Live board</h2>
+        <div class="chips">
+          <span class="chip" id="playerCountChip">0 / 8 players</span>
+          <span class="pill" id="statusPill2">open</span>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn danger" id="closeBtn">Close picks (lock)</button>
+        <button class="btn secondary" id="reopenBtn">Re-open picks</button>
+      </div>
+      <p class="muted" id="scorerHint">When the first goal goes in, click that player on the board below to reveal the winner.</p>
+      <div class="row">
+        <button class="btn secondary small" id="ownGoalBtn">First goal was an own goal / no winner</button>
+        <button class="btn secondary small" id="resetBtn">Reset all picks</button>
+      </div>
+    </div>
+
+    <div id="boardMount"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+  <script>HostPage.init();</script>
+</body>
+</html>

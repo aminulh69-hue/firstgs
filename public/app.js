@@ -1,0 +1,410 @@
+/* global io */
+'use strict';
+
+/* --------------------------------- shared --------------------------------- */
+function toast(msg, err) {
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.classList.toggle('err', !!err);
+  t.classList.add('show');
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
+  );
+}
+
+const statusLabel = { lobby: 'lobby', open: 'open', closed: 'locked' };
+
+/**
+ * Render the two-column board.
+ * opts: { myId, mode: 'play'|'host', onClick(playerId, taken, mine) }
+ */
+function renderBoard(mount, state, opts = {}) {
+  if (!state.teams) {
+    mount.innerHTML = '<div class="card muted center">Waiting for the host to load the lineups…</div>';
+    return;
+  }
+  const sides = [
+    ['home', state.teams.home],
+    ['away', state.teams.away],
+  ];
+  const scorer = state.firstScorerPlayerId;
+
+  mount.innerHTML = `<div class="board">${sides
+    .map(([key, team]) => {
+      const items = team.players
+        .map((p) => {
+          const pick = state.picks[p.id];
+          const taken = !!pick;
+          const mine = taken && pick.participantId === opts.myId;
+          const isWinner = scorer && scorer === p.id;
+          const cls = [
+            'player',
+            taken ? 'taken' : '',
+            mine ? 'mine' : '',
+            isWinner ? 'winner' : '',
+            opts.mode === 'play' && (taken && !mine) ? 'notclickable' : '',
+          ]
+            .filter(Boolean)
+            .join(' ');
+          const holder = taken
+            ? `<span class="holder">${isWinner ? '🏆 ' : ''}${esc(pick.displayName)}</span>`
+            : '';
+          const num = p.number != null ? p.number : '·';
+          return `<li class="${cls}" data-id="${esc(p.id)}" data-taken="${taken}" data-mine="${mine}">
+            <span class="num">${esc(num)}</span>
+            <span class="pname">${esc(p.name)}</span>
+            ${holder}
+          </li>`;
+        })
+        .join('');
+      return `<div class="team ${key}">
+        <h2><span class="dot"></span>${esc(team.name)}</h2>
+        <ul class="players">${items}</ul>
+      </div>`;
+    })
+    .join('')}</div>`;
+
+  if (opts.onClick) {
+    mount.querySelectorAll('.player').forEach((el) => {
+      el.addEventListener('click', () =>
+        opts.onClick(el.dataset.id, el.dataset.taken === 'true', el.dataset.mine === 'true')
+      );
+    });
+  }
+}
+
+function parsePlayers(text) {
+  return String(text || '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const m = line.match(/^(\d{1,2})[\s.).-]+(.+)$/);
+      if (m) return { number: parseInt(m[1], 10), name: m[2].trim() };
+      return { number: null, name: line };
+    });
+}
+
+function playersToText(players) {
+  return (players || [])
+    .map((p) => (p.number != null ? `${p.number} ${p.name}` : p.name))
+    .join('\n');
+}
+
+/* ================================ HOST PAGE =============================== */
+const HostPage = {
+  socket: null,
+  state: null,
+  code: null,
+
+  init() {
+    this.socket = io();
+    const $ = (id) => document.getElementById(id);
+
+    this.socket.on('connect', () => this.connectOrResume());
+    this.socket.on('state', (s) => this.onState(s));
+
+    $('copyLink').onclick = () => {
+      const inp = $('shareLink');
+      navigator.clipboard?.writeText(inp.value);
+      toast('Link copied');
+    };
+    $('importBtn').onclick = () => this.importBbc();
+    $('saveBtn').onclick = () => this.saveLineups(false);
+    $('openBtn').onclick = () => this.saveLineups(true);
+    $('closeBtn').onclick = () => this.socket.emit('host:close', (r) => this.ack(r, 'Picks locked'));
+    $('reopenBtn').onclick = () => this.socket.emit('host:open', (r) => this.ack(r, 'Picks re-opened'));
+    $('ownGoalBtn').onclick = () =>
+      this.socket.emit('host:declareScorer', { playerId: null }, (r) => this.ack(r, 'Marked: no winner'));
+    $('resetBtn').onclick = () => {
+      if (confirm('Clear everyone’s picks and start fresh?'))
+        this.socket.emit('host:reset', (r) => this.ack(r, 'Reset done'));
+    };
+  },
+
+  connectOrResume() {
+    const saved = JSON.parse(localStorage.getItem('fgs_host') || 'null');
+    if (saved && saved.code && saved.hostToken) {
+      this.socket.emit('host:resume', saved, (r) => {
+        if (r && r.ok) {
+          this.code = saved.code;
+          this.onState(r.state);
+        } else {
+          this.create();
+        }
+      });
+    } else {
+      this.create();
+    }
+  },
+
+  create() {
+    this.socket.emit('host:create', (r) => {
+      this.code = r.code;
+      localStorage.setItem('fgs_host', JSON.stringify({ code: r.code, hostToken: r.hostToken }));
+    });
+  },
+
+  ack(r, okMsg) {
+    if (r && r.error) toast(r.error, true);
+    else if (okMsg) toast(okMsg);
+  },
+
+  async importBbc() {
+    const url = document.getElementById('bbcUrl').value.trim();
+    const msg = document.getElementById('importMsg');
+    if (!url) return toast('Paste a BBC link first', true);
+    msg.textContent = 'Importing…';
+    try {
+      const res = await fetch('/api/import-bbc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      if (data.ok && data.teams) {
+        document.getElementById('homeName').value = data.teams.home.name || '';
+        document.getElementById('awayName').value = data.teams.away.name || '';
+        document.getElementById('homePlayers').value = playersToText(data.teams.home.players);
+        document.getElementById('awayPlayers').value = playersToText(data.teams.away.players);
+        msg.textContent = 'Imported — check the names, then open picks.';
+        toast('Lineups imported ✓');
+      } else {
+        msg.textContent = data.reason || 'Could not import. Enter lineups manually.';
+        toast('Auto-import failed — fill in manually', true);
+      }
+    } catch {
+      msg.textContent = 'Import failed. Enter lineups manually.';
+      toast('Import failed', true);
+    }
+  },
+
+  collectTeams() {
+    return {
+      home: {
+        name: document.getElementById('homeName').value.trim(),
+        players: parsePlayers(document.getElementById('homePlayers').value),
+      },
+      away: {
+        name: document.getElementById('awayName').value.trim(),
+        players: parsePlayers(document.getElementById('awayPlayers').value),
+      },
+    };
+  },
+
+  saveLineups(thenOpen) {
+    const teams = this.collectTeams();
+    if (!teams.home.name || !teams.away.name) return toast('Enter both team names', true);
+    if (teams.home.players.length < 1 || teams.away.players.length < 1)
+      return toast('Add players to both teams', true);
+    this.socket.emit('host:setLineups', { teams }, (r) => {
+      if (r && r.error) return toast(r.error, true);
+      toast('Lineups saved');
+      if (thenOpen) this.socket.emit('host:open', (r2) => this.ack(r2, 'Picks are open!'));
+    });
+  },
+
+  onState(s) {
+    this.state = s;
+    this.code = s.code;
+    const $ = (id) => document.getElementById(id);
+
+    $('roomCode').textContent = s.code;
+    const link = `${location.origin}/game.html?room=${s.code}`;
+    $('shareLink').value = link;
+
+    const pill = $('statusPill');
+    pill.textContent = statusLabel[s.status];
+    pill.className = 'pill ' + s.status;
+    const pill2 = $('statusPill2');
+    if (pill2) { pill2.textContent = statusLabel[s.status]; pill2.className = 'pill ' + s.status; }
+    $('playerCountChip').textContent = `${s.playerCount} / ${s.maxPlayers} players`;
+
+    // If picks are running, surface the live controls.
+    const live = s.status === 'open' || s.status === 'closed';
+    $('liveCard').classList.toggle('hidden', !live);
+
+    // Prefill setup fields from saved lineups (only when not yet open, to avoid clobbering edits).
+    if (s.teams && s.status === 'lobby') {
+      // leave host's in-progress edits alone
+    }
+
+    // Board: host can click a player to declare the first scorer.
+    const mount = $('boardMount');
+    renderBoard(mount, s, {
+      mode: 'host',
+      onClick: (playerId) => {
+        if (s.status === 'lobby') return;
+        const p = this.findPlayer(playerId);
+        if (!p) return;
+        if (confirm(`Mark ${p.name} as the FIRST goalscorer?`)) {
+          this.socket.emit('host:declareScorer', { playerId }, (r) => this.ack(r, 'Winner revealed! 🏆'));
+        }
+      },
+    });
+  },
+
+  findPlayer(id) {
+    if (!this.state || !this.state.teams) return null;
+    return [...this.state.teams.home.players, ...this.state.teams.away.players].find((p) => p.id === id);
+  },
+};
+
+/* ================================ GAME PAGE =============================== */
+const GamePage = {
+  socket: null,
+  state: null,
+  code: null,
+  myId: null,
+
+  init() {
+    const params = new URLSearchParams(location.search);
+    this.code = (params.get('room') || '').toUpperCase();
+    if (!this.code) { location.href = '/'; return; }
+
+    document.getElementById('joinCode').textContent = this.code;
+    const pending = sessionStorage.getItem('pendingName');
+    if (pending) document.getElementById('name').value = pending;
+
+    this.socket = io();
+    this.socket.on('state', (s) => this.onState(s));
+    this.socket.on('connect', () => this.tryResume());
+
+    document.getElementById('joinBtn').onclick = () => this.join();
+    document.getElementById('releaseBtn').onclick = () =>
+      this.socket.emit('player:release', (r) => { if (r && r.error) toast(r.error, true); });
+  },
+
+  savedId() {
+    const map = JSON.parse(localStorage.getItem('fgs_player') || '{}');
+    return map[this.code] || null;
+  },
+  storeId(id) {
+    const map = JSON.parse(localStorage.getItem('fgs_player') || '{}');
+    map[this.code] = id;
+    localStorage.setItem('fgs_player', JSON.stringify(map));
+  },
+
+  tryResume() {
+    const id = this.savedId();
+    if (!id) {
+      // Subscribe so we can show the board even before joining.
+      this.socket.emit('subscribe', { code: this.code }, (r) => {
+        if (r && r.error) toast(r.error, true);
+        else if (r && r.state) this.onState(r.state);
+      });
+      return;
+    }
+    this.socket.emit('player:join', { code: this.code, participantId: id }, (r) => {
+      if (r && r.ok) { this.myId = r.participantId; this.enterPlay(r.state); }
+      else this.socket.emit('subscribe', { code: this.code });
+    });
+  },
+
+  join() {
+    const name = document.getElementById('name').value.trim();
+    if (!name) return toast('Enter your name', true);
+    this.socket.emit('player:join', { code: this.code, displayName: name, participantId: this.savedId() }, (r) => {
+      if (r && r.error) { document.getElementById('joinMsg').textContent = r.error; return toast(r.error, true); }
+      this.myId = r.participantId;
+      this.storeId(r.participantId);
+      sessionStorage.removeItem('pendingName');
+      this.enterPlay(r.state);
+    });
+  },
+
+  enterPlay(s) {
+    document.getElementById('joinCard').classList.add('hidden');
+    document.getElementById('playArea').classList.remove('hidden');
+    this.onState(s);
+  },
+
+  onState(s) {
+    this.state = s;
+    const $ = (id) => document.getElementById(id);
+
+    const pill = $('statusPill');
+    if (pill) { pill.textContent = statusLabel[s.status]; pill.className = 'pill ' + s.status; }
+    if ($('countChip')) $('countChip').textContent = `${s.playerCount} / ${s.maxPlayers}`;
+
+    const me = this.myId ? s.participants[this.myId] : null;
+    const myPickId = me ? me.pickPlayerId : null;
+    const myPick = myPickId ? this.findPlayer(myPickId) : null;
+
+    if ($('meChip')) $('meChip').textContent = me ? `You: ${me.displayName}` : 'Spectating';
+
+    // My pick card
+    const relBtn = $('releaseBtn');
+    if (myPick) {
+      $('myPickTitle').textContent = `Your pick: ${myPick.name}`;
+      $('myPickSub').textContent = s.status === 'open'
+        ? 'Locked in. You can release it to choose someone else.'
+        : 'Picks are locked. Good luck!';
+      relBtn.classList.toggle('hidden', s.status !== 'open');
+    } else {
+      $('myPickTitle').textContent = me ? 'Pick your first goalscorer' : 'Watching the board';
+      $('myPickSub').textContent = s.status === 'open'
+        ? 'Tap any available player from either team to lock them in.'
+        : (s.status === 'closed' ? 'Picks are locked.' : 'Waiting for the host to open picks…');
+      relBtn.classList.add('hidden');
+    }
+
+    // Result banner
+    this.renderResult(s, myPickId);
+
+    // Board
+    renderBoard($('boardMount'), s, {
+      mode: 'play',
+      myId: this.myId,
+      onClick: (playerId, taken, mine) => this.onPlayerClick(playerId, taken, mine),
+    });
+  },
+
+  renderResult(s, myPickId) {
+    const el = document.getElementById('resultBanner');
+    if (!s.firstScorerPlayerId && s.firstScorerPlayerId !== null) { el.innerHTML = ''; return; }
+    // firstScorerPlayerId is null until declared; distinguish "not declared" from "no winner"
+    if (s.firstScorerPlayerId === null) {
+      // Could be undeclared OR declared-own-goal. We can't tell from null alone here,
+      // so only show "no winner" handling via the winner highlight path below.
+      el.innerHTML = '';
+      return;
+    }
+    const scorer = this.findPlayer(s.firstScorerPlayerId);
+    const pick = s.picks[s.firstScorerPlayerId];
+    if (!scorer) { el.innerHTML = ''; return; }
+    if (pick) {
+      const iWon = myPickId === s.firstScorerPlayerId;
+      el.innerHTML = `<div class="banner win">🏆 ${esc(pick.displayName)} called it! ${esc(scorer.name)} scored first.${iWon ? ' That’s you! 🎉' : ''}</div>`;
+    } else {
+      el.innerHTML = `<div class="banner lose">${esc(scorer.name)} scored first — nobody picked them. No winner this time.</div>`;
+    }
+  },
+
+  onPlayerClick(playerId, taken, mine) {
+    const s = this.state;
+    if (!s) return;
+    if (!this.myId) return toast('Join the game to pick', true);
+    if (s.status !== 'open') return toast(s.status === 'closed' ? 'Picks are locked' : 'Picks aren’t open yet', true);
+    if (mine) {
+      this.socket.emit('player:release', (r) => { if (r && r.error) toast(r.error, true); });
+      return;
+    }
+    if (taken) return toast('Already taken — too slow!', true);
+    this.socket.emit('player:claim', { playerId }, (r) => {
+      if (r && r.error) toast(r.error, true);
+      else toast('Locked in! 🔒');
+    });
+  },
+
+  findPlayer(id) {
+    if (!this.state || !this.state.teams) return null;
+    return [...this.state.teams.home.players, ...this.state.teams.away.players].find((p) => p.id === id);
+  },
+};
